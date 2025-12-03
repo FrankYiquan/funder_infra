@@ -19,16 +19,21 @@ def create_funder_pipeline(
     - S3 write permissions
     """
     # create SQS
-    queue = sqs.Queue(self, f"{name}Queue")
+    queue = sqs.Queue(self, f"{name}Queue", queue_name=f"{name}-Queue")
 
     # Lambda code path based on funder name
     lambda_fn = _lambda.Function(
         self,
         f"{name}Lambda",
         runtime=_lambda.Runtime.PYTHON_3_11,
-        handler="handler.handler", # what file to invoke (fileName.functionName)
-        code=_lambda.Code.from_asset(f"funder_infra/lambda/{name.lower()}"),
+        handler="handler.lambda_handler", # what file to invoke (fileName.functionName)
+        code=_lambda.Code.from_asset(f"funder_infra/lambdas/{name.lower()}"),
         layers=shared_layer,
+        environment={
+            "GRANT_BUCKET": brandeis_grants_bucket.bucket_name,
+            "LINKING_BUCKET": asset_grant_linking_bucket.bucket_name,
+        },
+        function_name=f"{name}-Lambda"
     )
 
     # wire SQS trigger

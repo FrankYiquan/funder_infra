@@ -31,13 +31,13 @@ def import_existing_funder(
         lambda_arn
     )
 
-    # reconnect SQS → Lambda trigger
-    lambda_fn.add_event_source(
-        lambda_event_sources.SqsEventSource(queue)
-    )
+    # # reconnect SQS → Lambda trigger
+    # lambda_fn.add_event_source(
+    #     lambda_event_sources.SqsEventSource(queue)
+    # )
 
-    # grant bucket write perms
-    asset_grant_linking_bucket.grant_write(lambda_fn)
-    brandeis_grants_bucket.grant_write(lambda_fn)
+    # # grant bucket write perms (they already have write perms)
+    # asset_grant_linking_bucket.grant_write(lambda_fn)
+    # brandeis_grants_bucket.grant_write(lambda_fn)
 
     return queue, lambda_fn

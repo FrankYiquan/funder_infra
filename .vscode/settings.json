@@ -1,0 +1,5 @@
+{
+  "python.analysis.extraPaths": [
+    "funder_infra/lambdas/layers/shared_utils_layer/python"
+  ]
+}
