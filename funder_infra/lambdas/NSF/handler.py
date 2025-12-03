@@ -3,30 +3,37 @@ import re
 import requests
 from datetime import datetime
 from utils.output_s3 import store_grant_and_linking
+import logging
 
-def clean_award_id(award_id: str) -> list[str] | None:
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def clean_award_id(award_id):
     text = str(award_id).strip()
 
     # Find all digit sequences in the string
     digit_groups = re.findall(r'\d+', text)
 
     if not digit_groups:
-        return None
+        return []
 
     # If the string contains more than one award code (detected by prefix letters)
     # Example: "DMR-1809762 CBET-1916877"
     codes = re.findall(r'[A-Za-z]+[- ]*\d+', text)
     if len(codes) > 1:
         # Multiple award codes → return each full ID separately
-        return [re.findall(r'\d+', code)[0] for code in codes]
+        return [
+                digits 
+                for code in codes
+                for digits in [re.findall(r'\d+', code)[0]]
+                if len(digits) > 3
+            ]   
 
     # Otherwise: one award code → combine digit pieces
     return ["".join(digit_groups)]
 
-
 def get_award_from_NSF(award_id: str) -> str:
-    #normalize the award_id to ensure it is a string
-    normalized_award_id = clean_award_id(award_id)[0]
+    normalized_award_id = award_id.strip()
    
     url = f"http://api.nsf.gov/services/v1/awards/{normalized_award_id}.json"
 
@@ -100,6 +107,9 @@ def lambda_handler(event, context):
 
             # Process each NSF award ID
             for nid in normalized_ids:
+                if not nid:
+                    continue # skip empty IDs
+
                 grant_result = get_award_from_NSF(nid)
               
                 # Store grant and linking info in S3
@@ -114,6 +124,13 @@ def lambda_handler(event, context):
 
         except Exception as e:
             responses["errors"].append(str(e))
+            logger.exception(
+                "Error processing record %s | award_id=%s | normalized_ids=%s | doi=%s",
+                record["messageId"],
+                award_id,
+                normalized_ids if "normalized_ids" in locals() else None,
+                doi = doi if "doi" in locals() else None
+            )
 
     return {
         "statusCode": 200,

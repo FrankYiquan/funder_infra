@@ -1,4 +1,5 @@
 from aws_cdk import (
+    Duration,
     aws_lambda as lambda_,
     aws_s3 as s3,
     aws_sqs as sqs,
@@ -18,9 +19,22 @@ def create_funder_pipeline(
     - Event source mapping (SQS -> Lambda)
     - S3 write permissions
     """
-    # create SQS
-    queue = sqs.Queue(self, f"{name}Queue", queue_name=f"{name}-Queue")
+    # create DLQ
+    dlq = sqs.Queue(self, f"{name}-DLQ")
 
+    # create SQS
+    queue = sqs.Queue(
+        self,
+        f"{name}Queue",
+        queue_name=f"{name}-Queue",
+        retention_period=Duration.minutes(30),
+        visibility_timeout=Duration.seconds(45),  # MUST be > Lambda timeout(30s)
+        dead_letter_queue=sqs.DeadLetterQueue(
+            max_receive_count=2,
+            queue=dlq
+        )
+    )
+   
     # Lambda code path based on funder name
     lambda_fn = _lambda.Function(
         self,
@@ -33,12 +47,16 @@ def create_funder_pipeline(
             "GRANT_BUCKET": brandeis_grants_bucket.bucket_name,
             "LINKING_BUCKET": asset_grant_linking_bucket.bucket_name,
         },
-        function_name=f"{name}-Lambda"
+        function_name=f"{name}-Lambda",
+        timeout=Duration.seconds(30),
     )
 
     # wire SQS trigger
     lambda_fn.add_event_source(
-        lambda_event_sources.SqsEventSource(queue)
+        lambda_event_sources.SqsEventSource(
+            queue,
+            batch_size=1,
+        )
     )
 
     # give Lambda write access to bucket
